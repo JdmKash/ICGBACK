@@ -8,63 +8,70 @@ from telebot.async_telebot import AsyncTeleBot
 import firebase_admin
 from firebase_admin import credentials, firestore, storage
 from telebot import types
+import logging
 
-# Initialize outside handler for cold start optimization
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+# Initialize Telegram Bot (outside handler for cold starts)
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 bot = AsyncTeleBot(BOT_TOKEN)
 
-# Firebase initialization
+# Initialize Firebase once
 if not firebase_admin._apps:
-    firebase_config = json.loads(os.environ.get('FIREBASE-SERVICE-ACCOUNT'))
-    cred = credentials.Certificate(firebase_config)
-    firebase_admin.initialize_app(cred, {'storageBucket': 'immigrantcoin-5b00f.appspot.com'})
+    try:
+        firebase_config = json.loads(os.environ.get('FIREBASE-SERVICE-ACCOUNT'))
+        cred = credentials.Certificate(firebase_config)
+        firebase_admin.initialize_app(cred, {
+            'storageBucket': 'immigrantcoin-5b00f.appspot.com'
+        })
+        logger.info("Firebase initialized successfully")
+    except Exception as e:
+        logger.error(f"Firebase init error: {str(e)}")
+
 db = firestore.client()
 bucket = storage.bucket()
 
-class Handler(BaseHTTPRequestHandler):  # <- Capital 'H' in Handler
-    def do_POST(self):
-        if self.path == '/api/webhook':
-            try:
-                content_length = int(self.headers['Content-Length'])
+class VercelHandler(BaseHTTPRequestHandler):
+    def handle_request(self):
+        try:
+            logger.debug(f"Received {self.command} request at {self.path}")
+            
+            if self.path == '/api/webhook' and self.command == 'POST':
+                content_length = int(self.headers.get('Content-Length', 0))
                 post_data = self.rfile.read(content_length)
-                update = types.Update.de_json(json.loads(post_data.decode('utf-8')))
+                update = types.Update.de_json(json.loads(post_data))
                 
                 # Process update
                 asyncio.run(bot.process_new_updates([update]))
                 
                 self.send_response(200)
-                self.send_header('Content-type', 'application/json')
+                self.send_header('Content-Type', 'application/json')
                 self.end_headers()
                 self.wfile.write(json.dumps({"success": True}).encode())
                 
-            except Exception as e:
-                self.send_error(500, message=str(e))
-        else:
-            self.send_error(404)
+            elif self.path == '/' and self.command == 'GET':
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/plain')
+                self.end_headers()
+                self.wfile.write(b"Bot is running")
+                
+            else:
+                self.send_error(404, "Endpoint not found")
+                
+        except Exception as e:
+            logger.error(f"Handler error: {str(e)}", exc_info=True)
+            self.send_error(500, f"Server error: {str(e)}")
 
     def do_GET(self):
-        if self.path == '/':
-            self.send_response(200)
-            self.send_header('Content-type', 'text/plain')
-            self.end_headers()
-            self.wfile.write("Bot is running".encode())
-        else:
-            self.send_error(404)
+        self.handle_request()
 
-def generate_start_keyboard():
-    keyboard = types.InlineKeyboardMarkup()
-    keyboard.add(types.InlineKeyboardButton(
-        "Open ImmigrantCoin App", 
-        web_app=types.WebAppInfo(url="https://immigrantcoins.netlify.app")
-    ))
-    return keyboard
+    def do_POST(self):
+        self.handle_request()
 
-@bot.message_handler(commands=['start'])
-async def start(message):
-    # [Keep your existing start handler code unchanged]
-    # ... (same as your original code) ...
-
-# Vercel requires this named export
-def main(request, response):
-    handler = Handler(request, response)
+# Vercel-specific export (MUST BE NAMED 'app')
+def app(request, response):
+    handler = VercelHandler(request, response, directory=None)
     handler.handle()
+    return response
