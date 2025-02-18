@@ -1,20 +1,18 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "api/webhook.py",
-      "use": "@vercel/python"
-    }
-  ],
+  "builds": [{
+    "src": "IMMIGRANTCOINBACKEND/api/webhook.py",
+    "use": "@vercel/python"
+  }],
   "routes": [
     {
       "src": "/api/webhook",
-      "dest": "/api/webhook.py",
+      "dest": "/IMMIGRANTCOINBACKEND/api/webhook.py",
       "methods": ["POST"]
     },
     {
       "src": "/",
-      "dest": "/api/webhook.py",
+      "dest": "/IMMIGRANTCOINBACKEND/api/webhook.py",
       "methods": ["GET"]
     }
   ]
