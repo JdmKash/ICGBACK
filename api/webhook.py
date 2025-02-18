@@ -101,7 +101,7 @@ async def start(message):
 
                     referrals = referrer_data.get('referrals', {})
                     if referrals is None:
-                        referrals + {}
+                        referrals = {}
                     referrals[user_id] = {
                         'addedValue': bonus_amount,
                         'firstName': user_first_name,
@@ -128,7 +128,7 @@ async def start(message):
         print(f"Error: {str(e)}")
 
 class handler(BaseHTTPRequestHandler):
-    def doPOST(self):
+    def do_POST(self):
         content_length = int(self.headers['Content-Length'])
         post_data = self.rfile.read(content_length)
         update_dict = json.loads(post_data.decode('utf-8'))
