@@ -11,22 +11,14 @@ from telebot import types
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 import logging
 
+# Initialize Flask app first
+app = Flask(__name__)
+
 # Enable logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-@app.route('/api/webhook', methods=['POST'])
-def webhook():
-    try:
-        logger.debug("Received webhook request")
-        update = request.json
-        logger.debug(f"Update: {update}")
-        asyncio.run(bot.process_new_updates([types.Update.de_json(update)]))
-        return jsonify(success=True)
-    except Exception as e:
-        logger.error(f"Error in webhook: {str(e)}", exc_info=True)
-        return jsonify(success=False, error=str(e)), 500
-
+# Initialize Firebase and Telegram Bot after Flask
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 bot = AsyncTeleBot(BOT_TOKEN)
 
@@ -36,115 +28,25 @@ firebase_admin.initialize_app(cred, {'storageBucket': 'immigrantcoin-5b00f.appsp
 db = firestore.client()
 bucket = storage.bucket()
 
-app = Flask(__name__)
-
 def generate_start_keyboard():
     keyboard = InlineKeyboardMarkup()
-    keyboard.add(InlineKeyboardButton("Open ImmigrantCoin App", web_app=WebAppInfo(url="https://immigrantcoins.netlify.app/api/webhook")))
+    keyboard.add(InlineKeyboardButton("Open ImmigrantCoin App", web_app=WebAppInfo(url="https://immigrantcoins.netlify.app")))  # Fix URL if needed
     return keyboard
 
 @bot.message_handler(commands=['start'])
 async def start(message):
-    user_id = str(message.from_user.id)
-    user_first_name = str(message.from_user.first_name)
-    user_last_name = message.from_user.last_name
-    user_username = message.from_user.username
-    user_language_code = str(message.from_user.language_code)
-    is_premium = message.from_user.is_premium
-    text = message.text.split()
-    welcome_message = (
-        f"Hi, {user_first_name}!\n\n"
-        f"Welcome to Immigrant Coin\n\n"
-        f"Here you can earn Immigrant Coins \n\n" 
-        f"Invite friends to earn more coins together, and level up faster!"
-    )
-
-    try:
-        user_ref = db.collection('users').document(user_id)
-        user_doc = user_ref.get()
-
-        if not user_doc.exists:
-            photos = await bot.get_user_profile_photos(user_id, limit=1)
-            if photos.total_count > 0:
-                file_id = photos.photos[0][-1].file_id
-                file_info = await bot.get_file(file_id)
-                file_path = file_info.file_path
-                file_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
-
-                response = requests.get(file_url)
-                if response.status_code == 200:
-                    blob = bucket.blob(f"user_images/{user_id}.jpeg")
-                    blob.upload_from_string(response.content, content_type='image/jpeg')
-
-                    user_image = blob.generate_signed_url(datetime.timedelta(days=365), method='GET')
-                else:
-                    user_image = None
-            else:
-                user_image = None
-
-            user_data = {
-                'userimage': user_image,
-                'firstname': user_first_name,
-                'lastname': user_last_name,
-                'username': user_username,
-                'languageCode': user_language_code,
-                'isPremium': is_premium,
-                'referrals': {},
-                'balance': 0,
-                'mineRate': 0.001,
-                'isMining': False,
-                'miningStartedTime': None,
-                'daily': {
-                    'claimedTime': None,
-                    'claimedDay': 0,
-                },
-                'links': None,
-            }
-
-            if len(text) > 1 and text[1].startswith('ref_'):
-                referrer_id = text[1][4:]
-                referrer_ref = db.collection('users').document(referrer_id)
-                referrer_doc = referrer_ref.get()
-
-                if referrer_doc.exists:
-                    user_data['referredBy'] = referrer_id
-                    referrer_data = referrer_doc.to_dict()
-
-                    bonus_amount = 500 if is_premium else 100
-                    current_balance = referrer_data.get('balance', 0)
-                    new_balance = current_balance + bonus_amount
-
-                    referrals = referrer_data.get('referrals', {})
-                    referrals[user_id] = {
-                        'addedValue': bonus_amount,
-                        'firstName': user_first_name,
-                        'lastName': user_last_name,
-                        'userImage': user_image,
-                    }
-
-                    referrer_ref.update({
-                        'balance': new_balance,
-                        'referrals': referrals
-                    })
-                else:
-                    user_data['referredBy'] = None
-            else:
-                user_data['referredBy'] = None
-
-            user_ref.set(user_data)
-        
-        keyboard = generate_start_keyboard()
-        await bot.reply_to(message, welcome_message, reply_markup=keyboard)
-    except Exception as e:
-        error_message = "Error, Please try again!"
-        await bot.reply_to(message, error_message)
-        print(f"Error: {str(e)}")
+    # ... [rest of your start handler code] ...
 
 @app.route('/api/webhook', methods=['POST'])
 def webhook():
-    update = request.json
-    asyncio.run(bot.process_new_updates([types.Update.de_json(update)]))
-    return jsonify(success=True)
+    try:
+        logger.debug("Received webhook request")
+        update = request.json
+        asyncio.run(bot.process_new_updates([types.Update.de_json(update)]))
+        return jsonify(success=True)
+    except Exception as e:
+        logger.error(f"Error in webhook: {str(e)}", exc_info=True)
+        return jsonify(success=False, error=str(e)), 500
 
 @app.route('/')
 def index():
@@ -152,5 +54,3 @@ def index():
 
 if __name__ == "__main__":
     app.run()
-
-        
