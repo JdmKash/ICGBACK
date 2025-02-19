@@ -12,20 +12,30 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
 
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
+if not BOT_TOKEN:
+    raise ValueError("BOT_TOKEN enviroment variable missing")
 bot = AsyncTeleBot(BOT_TOKEN)
 
 firebase_config = json.loads(os.environ.get('FIREBASE_SERVICE_ACCOUNT'))
+if not firebase_config:
+    raise ValueError("FIREBASE_SERVICE_ACCOUNT enviroment variable missing")
 cred = credentials.Certificate(firebase_config)
 firebase_admin.initialize_app(cred, {'storageBucket': 'immigrantcoin-5b00f.appspot.com'})
 db = firestore.client()
 bucket = storage.bucket()
+
+
+
+firebase_config = os.environ.get('FIREBASE_SERVICE_ACCOUNT')
+if not firebase_config:
+    raise ValueError("FIREBASE_SERVICE_ACCOUNT environment variable missing")
 
 def generate_start_keyboard():
     keyboard = InlineKeyboardMarkup()
     keyboard.add(InlineKeyboardButton("Open ImmigrantCoin App", web_app=WebAppInfo(url="https://immigrantcoins.netlify.app/")))
     return keyboard
 
-@bot.message_handler(commands=['/start'])
+@bot.message_handler(commands=['start'])
 async def start(message):
     user_id = str(message.from_user.id)
     user_first_name = str(message.from_user.first_name)
