@@ -20,7 +20,7 @@ firebase_config = json.loads(os.environ.get('FIREBASE_SERVICE_ACCOUNT'))
 if not firebase_config:
     raise ValueError("FIREBASE_SERVICE_ACCOUNT enviroment variable missing")
 cred = credentials.Certificate(firebase_config)
-firebase_admin.initialize_app(cred, {'storageBucket': 'immigrantcoin-5b00f.appspot.com'})
+firebase_admin.initialize_app(cred, {'storageBucket': 'immigrantcoin-5b00f.firebasestorage.app'})
 db = firestore.client()
 bucket = storage.bucket()
 
