@@ -25,7 +25,7 @@ def generate_start_keyboard():
     keyboard.add(InlineKeyboardButton("Open ImmigrantCoin App", web_app=WebAppInfo(url="https://immigrantcoins.netlify.app/")))
     return keyboard
 
-@bot.message_handler(commands=['start'])
+@bot.message_handler(commands=['/start'])
 async def start(message):
     user_id = str(message.from_user.id)
     user_first_name = str(message.from_user.first_name)
@@ -123,7 +123,7 @@ async def start(message):
         keyboard = generate_start_keyboard()
         await bot.reply_to(message, welcome_message, reply_markup=keyboard)
     except Exception as e:
-        error_message = "Error, Please try again!"
+        error_message = "Error, Man WTF"
         await bot.reply_to(message, error_message)
         print(f"Error: {str(e)}")
 
