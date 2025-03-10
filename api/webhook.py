@@ -11,7 +11,7 @@ from firebase_admin import credentials, firestore, storage
 from telebot import types
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
-BOT_TOKEN = os.environ.get('BOT_TOKEN')
+BOT_TOKEN = os.environ.get('8055333888:AAFxPrjpEUN5gReRG7wAxLP1cqIM8bEFypo')
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN enviroment variable missing")
 bot = AsyncTeleBot(BOT_TOKEN)
