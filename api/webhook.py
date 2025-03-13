@@ -4,14 +4,14 @@ import json
 import asyncio
 import requests
 import datetime
-from urllib.parse import parse_qs
 from telebot.async_telebot import AsyncTeleBot
 import firebase_admin
 from firebase_admin import credentials, firestore, storage
 from telebot import types
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
-BOT_TOKEN = os.environ.get('8055333888:AAFxPrjpEUN5gReRG7wAxLP1cqIM8bEFypo')
+
+BOT_TOKEN = os.environ.get('BOT_TOKEN')
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN enviroment variable missing")
 bot = AsyncTeleBot(BOT_TOKEN)
@@ -23,6 +23,12 @@ cred = credentials.Certificate(firebase_config)
 firebase_admin.initialize_app(cred, {'storageBucket': 'immigrantcoin-5b00f.firebasestorage.app'})
 db = firestore.client()
 bucket = storage.bucket()
+
+
+
+firebase_config = os.environ.get('FIREBASE_SERVICE_ACCOUNT')
+if not firebase_config:
+    raise ValueError("FIREBASE_SERVICE_ACCOUNT environment variable missing")
 
 def generate_start_keyboard():
     keyboard = InlineKeyboardMarkup()
@@ -51,7 +57,6 @@ async def start(message):
 
         if not user_doc.exists:
             photos = await bot.get_user_profile_photos(user_id, limit=1)
-            user_image = None
             if photos.total_count > 0:
                 file_id = photos.photos[0][-1].file_id
                 file_info = await bot.get_file(file_id)
@@ -60,9 +65,15 @@ async def start(message):
 
                 response = requests.get(file_url)
                 if response.status_code == 200:
+                    
                     blob = bucket.blob(f"user_images/{user_id}.jpeg")
                     blob.upload_from_string(response.content, content_type='image/jpeg')
+
                     user_image = blob.generate_signed_url(datetime.timedelta(days=365), method='GET')
+                else:
+                    user_image = None
+            else:
+                user_image = None
 
             user_data = {
                 'userimage': user_image,
@@ -83,6 +94,40 @@ async def start(message):
                 'links': None,
             }
 
+            if len(text) > 1 and text[1].startswith('ref_'):
+                referrer_id = text[1][4:]
+                referrer_ref = db.collection('users').document(referrer_id)
+                referrer_doc = referrer_ref.get()
+
+                if referrer_doc.exists:
+                    user_data['referredBy'] = referrer_id
+                    
+                    referrer_data = referrer_doc.to_dict()
+
+                    bonus_amount = 500 if is_premium else 100
+                    
+                    current_balance = referrer_data.get('balance', 0)
+                    new_balance = current_balance + bonus_amount
+
+                    referrals = referrer_data.get('referrals', {})
+                    if referrals is None:
+                        referrals = {}
+                    referrals[user_id] = {
+                        'addedValue': bonus_amount,
+                        'firstName': user_first_name,
+                        'lastName': user_last_name,
+                        'userImage': user_image,
+                    }
+
+                    referrer_ref.update({
+                        'balance': new_balance,
+                        'referrals': referrals
+                    })
+                else:
+                    user_data['referredBy'] = None
+            else:
+                user_data['referredBy'] = None
+
             user_ref.set(user_data)
         
         keyboard = generate_start_keyboard()
@@ -96,68 +141,19 @@ class handler(BaseHTTPRequestHandler):
     def do_POST(self):
         content_length = int(self.headers['Content-Length'])
         post_data = self.rfile.read(content_length)
-        path = self.path
+        update_dict = json.loads(post_data.decode('utf-8'))
 
-        if path == "/api/ad-complete":
-            data = json.loads(post_data.decode('utf-8'))
-            user_id = data.get('user_id')
-            if user_id:
-                asyncio.run(self.reward_user(user_id))
-                self.send_response(200)
-            else:
-                self.send_response(400)
-            self.end_headers()
-        else:
-            update_dict = json.loads(post_data.decode('utf-8'))
-            asyncio.run(self.process_update(update_dict))
-            self.send_response(200)
-            self.end_headers()
+        asyncio.run(self.process_update(update_dict))
 
-    async def reward_user(self, user_id):
-        # Example: Update Firestore user balance (add 100 coins for watching ad)
-        user_ref = db.collection('users').document(user_id)
-        user_doc = user_ref.get()
-        if user_doc.exists:
-            current_balance = user_doc.to_dict().get('balance', 0)
-            user_ref.update({'balance': current_balance + 100})
-            await bot.send_message(user_id, "✅ You've earned 100 coins for watching the ad!")
+        self.send_response(200)
+        self.end_headers()
 
     async def process_update(self, update_dict):
         update = types.Update.de_json(update_dict)
         await bot.process_new_updates([update])
 
     def do_GET(self):
-        path = self.path
-        if path.startswith("/view-ad"):
-            query = parse_qs(path[9:])
-            user_id = query.get('user_id', [None])[0]
-            self.send_response(200)
-            self.send_header('Content-type', 'text/html')
-            self.end_headers()
-            self.wfile.write(f'''
-                <html>
-                <head><title>Watch Ad</title></head>
-                <body>
-                    <h2>Watch this ad to earn rewards!</h2>
-                    <button onclick="completeAd()">Simulate Ad Completion</button>
-                    <script>
-                        function completeAd() {{
-                            fetch('/api/ad-complete', {{
-                                method: 'POST',
-                                headers: {{ 'Content-Type': 'application/json' }},
-                                body: JSON.stringify({{ user_id: "{user_id}" }})
-                            }}).then(response => {{
-                                if (response.ok) {{
-                                    alert('Ad watched successfully!');
-                                    window.close();
-                                }}
-                            }});
-                        }}
-                    </script>
-                </body>
-                </html>
-            '''.encode())
-        else:
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write("Bot is running".encode())
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write("Bot is running".encode())
+        
